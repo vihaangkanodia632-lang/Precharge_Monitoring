@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Precharge Monitor</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    PRECHARGE<span class="slash">//</span>MONITOR
+    <span class="sub">FSAE HV PRECHARGE TELEMETRY</span>
+  </div>
+  <div class="topbar-meta">
+    <span id="clock">--:--:--</span>
+    <span id="status-pill" class="status-pill offline">
+      <span class="status-dot"></span>
+      <span id="status-text">OFFLINE</span>
+    </span>
+  </div>
+</header>
+
+<div id="fault-banner" class="panel" style="border-color: var(--fault-red); background: var(--fault-red-dim); color: var(--text-hi); font-family: var(--font-mono); padding: 10px 16px;" hidden></div>
+
+<!-- ============================================================ -->
+<!-- Schematic stepper                                              -->
+<!-- ============================================================ -->
+<div class="stepper-panel">
+  <svg class="stepper-svg" viewBox="0 0 1000 240" xmlns="http://www.w3.org/2000/svg">
+
+    <!-- edges (drawn first so node circles sit on top of line ends) -->
+    <line id="edge-0-1" class="edge" x1="70" y1="70" x2="280" y2="70" />
+    <line id="edge-1-2" class="edge" x1="280" y1="70" x2="490" y2="70" />
+    <line id="edge-2-3" class="edge" x1="490" y1="70" x2="700" y2="70" />
+    <line id="edge-3-4" class="edge" x1="700" y1="70" x2="910" y2="70" />
+    <line id="edge-fault" class="edge edge-fault" x1="490" y1="70" x2="490" y2="190" />
+
+    <!-- main path nodes -->
+    <g id="node-0" class="node">
+      <circle cx="70" cy="70" r="26" />
+      <text x="70" y="116" text-anchor="middle">IDLE</text>
+    </g>
+    <g id="node-1" class="node">
+      <circle cx="280" cy="70" r="26" />
+      <text x="280" y="116" text-anchor="middle">AIR&#8211;</text>
+    </g>
+    <g id="node-2" class="node">
+      <circle cx="490" cy="70" r="26" />
+      <text x="490" y="116" text-anchor="middle">PRECHARGE</text>
+    </g>
+    <g id="node-3" class="node">
+      <circle cx="700" cy="70" r="26" />
+      <text x="700" y="116" text-anchor="middle">LOGIC OK</text>
+    </g>
+    <g id="node-4" class="node">
+      <circle cx="910" cy="70" r="26" />
+      <text x="910" y="116" text-anchor="middle">HV ACTIVE</text>
+    </g>
+
+    <!-- fault branch node -->
+    <g id="node-fault" class="node">
+      <circle cx="490" cy="190" r="22" />
+      <text x="490" y="226" text-anchor="middle">TIMEOUT</text>
+    </g>
+  </svg>
+</div>
+
+<!-- ============================================================ -->
+<!-- Main grid                                                       -->
+<!-- ============================================================ -->
+<div class="layout">
+
+  <!-- LEFT column -->
+  <div>
+    <div class="panel">
+      <p class="panel-title">Live Signals — Stage: <span id="stage-label" style="color: var(--text-hi);">—</span></p>
+
+      <div class="signal-grid">
+        <div class="signal-card">
+          <div class="signal-name">Comparator</div>
+          <div class="signal-state"><span id="comp-led" class="led"></span><span id="comp-state">LOW</span></div>
+          <div id="comp-detail" class="signal-detail">0.00 V · ADC 0</div>
+        </div>
+        <div class="signal-card">
+          <div class="signal-name">555 Timer</div>
+          <div class="signal-state"><span id="timer-led" class="led"></span><span id="timer-state">LOW</span></div>
+          <div id="timer-detail" class="signal-detail">0.00 V · ADC 0</div>
+        </div>
+        <div class="signal-card">
+          <div class="signal-name">AND Gate</div>
+          <div class="signal-state"><span id="and-led" class="led"></span><span id="and-state">LOW</span></div>
+        </div>
+        <div class="signal-card">
+          <div class="signal-name">Precharge Relay</div>
+          <div class="signal-state"><span id="pchg-led" class="led"></span><span id="pchg-state">LOW</span></div>
+        </div>
+        <div class="signal-card">
+          <div class="signal-name">AIR&#8211; Contactor</div>
+          <div class="signal-state"><span id="airm-led" class="led"></span><span id="airm-state">LOW</span></div>
+        </div>
+        <div class="signal-card">
+          <div class="signal-name">AIR+ Contactor</div>
+          <div class="signal-state"><span id="airp-led" class="led"></span><span id="airp-state">LOW</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Live Precharge Curve</p>
+      <div class="curve-meta">
+        <div>Cycle <b id="cycle-id">—</b></div>
+        <div>Elapsed <b id="elapsed-ms">—</b></div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="curve-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT column -->
+  <div>
+    <div class="panel">
+      <p class="panel-title">Cycle Stats</p>
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Total Cycles</div>
+          <div id="stat-total" class="stat-value">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pass Rate</div>
+          <div id="stat-passrate" class="stat-value">0%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Precharge Time</div>
+          <div id="stat-avgduration" class="stat-value">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Last Fault</div>
+          <div id="stat-lastfault" class="stat-value red">None</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Cycle History</p>
+      <div class="history-table-wrap">
+        <table>
+          <thead>
+            <tr><th>Cycle</th><th>Duration</th><th>Peak V</th><th>Result</th></tr>
+          </thead>
+          <tbody id="history-body">
+            <tr class="empty-row"><td colspan="4">Waiting for data…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>ESP32-S3 &middot; Firebase Realtime Database &middot; refresh-free live telemetry</footer>
+
+<!-- Firebase compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.3/chart.umd.min.js"></script>
+
+<script src="app.js"></script>
+</body>
+</html>
